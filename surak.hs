@@ -74,7 +74,7 @@ onAllValuations subfn v ats = case ats of
           && (onAllValuations subfn (v' True) ps)
 
 isTautology :: Formula -> Bool
-isTautology fm = onAllValuations (eval fm) (\s -> False) (atoms fm)
+isTautology fm = onAllValuations (eval fm) (Const False) (atoms fm)
 
 isUnsatisfiable :: Formula -> Bool
 isUnsatisfiable fm = isTautology (Not fm)
