@@ -99,7 +99,7 @@ eval f v = case f of
   Not p       -> not (eval p v)
   And p q     -> eval p v && eval q v
   Or p q      -> eval p v || eval q v
-  Implies p q -> not $ eval p v || eval q v
+  Implies p q -> not (eval p v) || eval q v
   Iff p q     -> eval p v == eval q v
 
 -- | This acts like a "hook", extending a function 'f' to '(p |-> y) f'
