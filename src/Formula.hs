@@ -19,7 +19,12 @@ module Formula (PropVar,
                 onAllValuations,
                 isTautology,
                 isSatisfiable,
-                isUnsatisfiable) where
+                isUnsatisfiable,
+                isNegative,
+                isPositive,
+                dual,
+                propSimplify,
+                propSubstitute) where
 import qualified Data.List
 
 -- | We're working with propositional calculus in this version, so we
@@ -50,6 +55,18 @@ instance Show Formula where
   show (Or p q) = "(Or "++show p++" "++show q++")"
   show (Implies p q) = "(Implies "++show p++" "++show q++")"
   show (Iff p q) = "(Iff "++show p++" "++show q++")"
+
+-- | A 'Formula' is-a tree, but we care about the 'Atom' leaves. This
+-- just maps the atoms, while respecting the tree-structure.
+mapAtoms :: (PropVar -> Formula) -> Formula -> Formula
+mapAtoms f F             = F
+mapAtoms f T             = T
+mapAtoms f (Atom x)      = f x
+mapAtoms f (Not p)       = Not (mapAtoms f p)
+mapAtoms f (And p q)     = And (mapAtoms f p) (mapAtoms f q)
+mapAtoms f (Or p q)      = Or (mapAtoms f p) (mapAtoms f q)
+mapAtoms f (Implies p q) = Implies (mapAtoms f p) (mapAtoms f q)
+mapAtoms f (Iff p q)     = Iff (mapAtoms f p) (mapAtoms f q)
 
 -- | Get all the propositional variables in a formula, with duplicates;
 -- a helper function for 'atoms' 
@@ -113,3 +130,63 @@ isSatisfiable :: Formula -> Bool
 isSatisfiable = not . isUnsatisfiable
 
 
+{- utility functions -}
+isNegative :: Formula -> Bool
+isNegative (Not fm) = True
+isNegative _ = False
+
+isPositive :: Formula -> Bool
+isPositive = not . isNegative
+
+-- | Take the dual of a formula. Assumes the formula is in negation
+-- normal form. Throws an error if it enounters an 'Implies' or 'Iff'.
+dual :: Formula -> Formula
+dual fm = case fm of
+  F       -> T
+  T       -> F
+  Atom x  -> fm
+  Not p   -> Not (dual p)
+  And p q -> Or (dual p) (dual q)
+  Or p q  -> And (dual p) (dual q)
+  _       -> error "dual called on formula involving 'Implies' or 'Iff'"
+
+(|=>) :: PropVar -> Formula -> PropVar -> Formula
+(|=>) x f y = if x==y then f else undefined
+
+propSubstitute :: PropVar -> Formula -> Formula -> Formula
+propSubstitute x y = mapAtoms (\a -> if a == x then y else Atom a)
+
+{- simplification -}
+simplifyProp' :: Formula -> Formula
+simplifyProp' fm = case fm of
+  Not F       -> T
+  Not T       -> F
+  Not (Not p) -> p
+  And _ F     -> F
+  And F _     -> F
+  And p T     -> p
+  And T q     -> q
+  Or _ T      -> T
+  Or T _      -> T
+  Or F p      -> p
+  Or p F      -> p
+  Implies F _ -> T
+  Implies _ T -> T
+  Implies p F -> Not p
+  Iff p T     -> p
+  Iff T p     -> p
+  Iff F F     -> T
+  Iff p F     -> Not p
+  Iff F p     -> Not p
+  _           -> fm
+
+-- | Simplifies various logical structures, avoids double negatives, etc.
+-- Necessary as a first step to get a formula in NNF.
+simplifyProp :: Formula -> Formula
+simplifyProp fm = case fm of
+  Not p       -> simplifyProp' (Not (simplifyProp p))
+  And p q     -> simplifyProp' (And (simplifyProp p) (simplifyProp q))
+  Or p q      -> simplifyProp' (Or (simplifyProp p) (simplifyProp q))
+  Implies p q -> simplifyProp' (Implies (simplifyProp p) (simplifyProp q))
+  Iff p q     -> simplifyProp' (Iff (simplifyProp p) (simplifyProp q))
+  _           -> fm
