@@ -82,14 +82,14 @@ eval f v = case f of
   Not p       -> not (eval p v)
   And p q     -> eval p v && eval q v
   Or p q      -> eval p v || eval q v
-  Implies p q -> not (eval p v) || (eval q v)
+  Implies p q -> not $ eval p v || eval q v
   Iff p q     -> eval p v == eval q v
 
 -- | This acts like a "hook", extending a function 'f' to '(p |-> y) f'
 -- which will map 'p' to 'y', and any other propositional variable 'q' to
 -- 'f q'.
-(|->) :: PropVar -> a -> (PropVar -> a) -> (PropVar -> a)
-(|->) p y f = (\p' -> if p' == p then y else f p')
+(|->) :: PropVar -> a -> (PropVar -> a) -> PropVar -> a
+(|->) p y f p' = if p' == p then y else f p'
 
 -- | Recursively constructs all possible valuations on a given list of
 -- atoms, then calls 'subfn' on each resulting valuation, "folds" them

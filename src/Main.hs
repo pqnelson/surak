@@ -11,17 +11,16 @@ This just runs 16 tests from the literature.
 module Main where
 import Formula
 
-
-testToStr :: Formula -> [Char]
+testToStr :: Formula -> String
 testToStr fm = let result = isTautology fm
                in if not result
-                  then (show fm) ++ " is " ++ show result ++ "\n"
+                  then show fm ++ " is " ++ show result ++ "\n"
                   else "...True\n"
 
 -- | A number of tests taken from Francis Pelletier's "Seventy-Five
 -- Problems for Testing Automatic Theorem Provers" /Journal of Automated
 -- Reasoning/ _2_ (1986) 191-216
-tautologyTests :: () -> [Char]
+tautologyTests :: () -> String
 tautologyTests _ =
   let p = Atom "p"
       q = Atom "q"
@@ -41,6 +40,10 @@ tautologyTests _ =
                           (And (Or (Not p) q)
                                (Or p (Not q))))
                      (Not (Or (Not p) (Not q)))), --- Problem 9
+            (Implies (And (Implies q r)
+                      (And (Implies r (And p q))
+                           (Implies p (Or q r))))
+                     (Iff p q)), --- Modified version of Problem 10
             (Iff p p), --- Problem 11
             (Iff (Iff (Iff p q) r) (Iff p (Iff q r))),
             (Iff (Or p (And q r))
