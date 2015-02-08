@@ -23,7 +23,7 @@ module Formula (PropVar,
                 isNegative,
                 isPositive,
                 dual,
-                propSimplify,
+                simplifyProp,
                 propSubstitute) where
 import qualified Data.List
 
@@ -59,8 +59,8 @@ instance Show Formula where
 -- | A 'Formula' is-a tree, but we care about the 'Atom' leaves. This
 -- just maps the atoms, while respecting the tree-structure.
 mapAtoms :: (PropVar -> Formula) -> Formula -> Formula
-mapAtoms f F             = F
-mapAtoms f T             = T
+mapAtoms _ F             = F
+mapAtoms _ T             = T
 mapAtoms f (Atom x)      = f x
 mapAtoms f (Not p)       = Not (mapAtoms f p)
 mapAtoms f (And p q)     = And (mapAtoms f p) (mapAtoms f q)
@@ -132,7 +132,7 @@ isSatisfiable = not . isUnsatisfiable
 
 {- utility functions -}
 isNegative :: Formula -> Bool
-isNegative (Not fm) = True
+isNegative (Not _) = True
 isNegative _ = False
 
 isPositive :: Formula -> Bool
@@ -144,14 +144,11 @@ dual :: Formula -> Formula
 dual fm = case fm of
   F       -> T
   T       -> F
-  Atom x  -> fm
+  Atom _  -> fm
   Not p   -> Not (dual p)
   And p q -> Or (dual p) (dual q)
   Or p q  -> And (dual p) (dual q)
   _       -> error "dual called on formula involving 'Implies' or 'Iff'"
-
-(|=>) :: PropVar -> Formula -> PropVar -> Formula
-(|=>) x f y = if x==y then f else undefined
 
 propSubstitute :: PropVar -> Formula -> Formula -> Formula
 propSubstitute x y = mapAtoms (\a -> if a == x then y else Atom a)
