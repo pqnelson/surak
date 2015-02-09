@@ -11,20 +11,35 @@ This code is related to all the formula manipulation. So far, it is just
 propositional calculus, but eventually it will be extended to first-order
 logic.
 -}
-module Formula (PropVar,
-                Formula(F,T,Atom,Not,And,Or,Implies,Iff),
-                Valuation,
-                atoms,
-                eval,
-                onAllValuations,
-                isTautology,
-                isSatisfiable,
-                isUnsatisfiable,
-                isNegative,
-                isPositive,
-                dual,
-                simplifyProp,
-                propSubstitute) where
+module Formula
+       (
+         PropVar
+       , Formula(..)
+       , Valuation
+       , atoms
+       , eval
+       , onAllValuations
+       , isTautology
+       , isSatisfiable
+       , isUnsatisfiable
+       , isLiteral
+       , isNegative
+       , isPositive
+       , dual
+       , simplifyProp
+       , propSubstitute
+       , toNNF
+       , toNENF
+       , foldlConj
+       , foldrDisj
+       , naiveToDNF
+       , nnfToDNF
+       , pureDNF
+       , toDNF
+       , toCNF
+       ) where
+import Prelude hiding (negate)
+import qualified Set
 import qualified Data.List
 
 -- | We're working with propositional calculus in this version, so we
@@ -44,7 +59,7 @@ data Formula = F
              | Or Formula Formula
              | Implies Formula Formula
              | Iff Formula Formula
-               deriving (Eq)
+               deriving (Eq, Ord)
 
 instance Show Formula where
   show F = "F"
@@ -83,7 +98,7 @@ rawAtoms f = case f of
 
 -- | Get all the propositional variables in a formula, without duplicates
 atoms :: Formula -> [PropVar]
-atoms = Data.List.nub . rawAtoms
+atoms = Set.setify . rawAtoms
 
 -- | Valuations simply evaluate any given propositional variable as
 -- either 'True' or 'False'
@@ -131,6 +146,11 @@ isSatisfiable = not . isUnsatisfiable
 
 
 {- utility functions -}
+isLiteral :: Formula -> Bool
+isLiteral (Atom _) = True
+isLiteral (Not (Atom _)) = True
+isLiteral _ = False
+
 isNegative :: Formula -> Bool
 isNegative (Not _) = True
 isNegative _ = False
@@ -187,3 +207,134 @@ simplifyProp fm = case fm of
   Implies p q -> simplifyProp' (Implies (simplifyProp p) (simplifyProp q))
   Iff p q     -> simplifyProp' (Iff (simplifyProp p) (simplifyProp q))
   _           -> fm
+
+toNNF' :: Formula -> Formula
+toNNF' fm = case fm of
+  And p q           -> And (toNNF' p) (toNNF' q)
+  Or p q            -> Or (toNNF' p) (toNNF' q)
+  Implies p q       -> Or (toNNF' (Not p)) (toNNF' q)
+  Iff p q           -> Or (And (toNNF' p) (toNNF' q))
+                          (And (toNNF' (Not p)) (toNNF' (Not q)))
+  Not (Not p)       -> toNNF' p
+  Not (And p q)     -> Or (toNNF' (Not p)) (toNNF' (Not q))
+  Not (Or p q)      -> And (toNNF' (Not p)) (toNNF' (Not q))
+  Not (Implies p q) -> And (toNNF' p) (toNNF' (Not q))
+  Not (Iff p q)     -> Or (And (toNNF' p) (toNNF' q))
+                          (And (toNNF' (Not p)) (toNNF' (Not q)))
+  _                 -> fm
+
+toNNF :: Formula -> Formula
+toNNF = toNNF' . simplifyProp
+
+toNENF' :: Formula -> Formula
+toNENF' fm = case fm of
+  Not (Not p)       -> toNENF' p
+  Not (And p q)     -> Or (toNENF' p) (toNENF' q)
+  Not (Implies p q) -> And (toNENF' p) (toNENF' (Not q))
+  Not (Iff p q)     -> Iff (toNENF' p) (toNENF' (Not q))
+  And p q           -> And (toNENF' p) (toNENF' q)
+  Or p q            -> Or (toNENF' p) (toNENF' q)
+  Implies p q       -> Or (toNENF' (Not p)) (toNENF' q)
+  Iff p q           -> Iff (toNENF' p) (toNENF' q)
+  _                 -> fm
+
+toNENF :: Formula -> Formula
+toNENF = toNENF' . simplifyProp
+
+-- | Given a list of formulas, apply `foldl And T` to them to get a single
+-- formula.
+--
+-- >>> foldlConj [(Atom "a"), (Atom "b"), (Atom "c")]
+-- And (And (And T (Atom "c")) (Atom "b")) (Atom "a")
+foldlConj :: [Formula] -> Formula
+foldlConj [] = T
+foldlConj (f:fs) = And (foldlConj fs) f
+
+-- | Given a list of formulas, apply `foldr Or F` to them to get a single
+-- formula.
+--
+-- >>> foldrDisj [(Atom "a"), (Atom "b"), (Atom "c")]
+-- Or (Atom "a") (Or (Atom "b") (Or (Atom "c") F))
+foldrDisj :: [Formula] -> Formula
+foldrDisj = foldr Or F
+
+-- | Get all valuations which satisfy some property 'prop'
+allValuationsSatisfying :: (Valuation -> Bool) -> Valuation -> [PropVar] -> [Valuation]
+allValuationsSatisfying p v [] = [v | p v]
+allValuationsSatisfying p v (a:pvs) =
+  allValuationsSatisfying p ((a |-> False) v) pvs
+  ++ allValuationsSatisfying p ((a |-> True) v) pvs
+
+-- | Given a list of propositional variables and a fixed valuation 'v', map
+-- the propositional variables through 'if eval (Atom _) v then (toAtom
+-- _) else (Not (toAtom _))', the 'foldlConj' the resulting formulas all
+-- together 
+makeLiterals :: [PropVar] -> Valuation -> Formula
+makeLiterals ats v = foldlConj (map ((\p -> if eval p v then p else Not p)
+                                     . Atom)
+                                ats)
+
+naiveToDNF :: Formula -> Formula
+naiveToDNF fm =
+  let ats = atoms fm
+      satVals = allValuationsSatisfying (eval fm) (const False) ats
+  in foldrDisj (map (makeLiterals ats) satVals)
+
+-- | Distributes 'And' over 'Or' in formulas
+distrib :: Formula -> Formula
+distrib (And p (Or q r)) = Or (distrib (And p q)) (distrib (And p r))
+distrib (And (Or p q) r) = Or (distrib (And p r)) (distrib (And q r))
+distrib fm = fm
+
+-- | Converts an NNF to a DNF by iteratively applying 'distrib'.
+nnfToDNF :: Formula -> Formula
+nnfToDNF (And p q) = distrib (And (nnfToDNF p) (nnfToDNF q))
+nnfToDNF (Or p q) = Or (nnfToDNF p) (nnfToDNF q)
+nnfToDNF fm = fm
+
+--- Helper function
+allPairs :: Ord c => (a -> b -> c) -> [a] -> [b] -> [c]
+allPairs f xs ys = Set.setify [f x y | x <- xs, y <- ys]
+
+pureDNF :: Formula -> [[Formula]]
+pureDNF fm = case fm of
+  And p q -> Set.setify $ allPairs Set.union (pureDNF p) (pureDNF q)
+  Or p q  -> Set.union (pureDNF p) (pureDNF q)
+  _       -> [[fm]]
+
+negate :: Formula -> Formula
+negate (Not fm) = fm
+negate fm = Not fm
+
+isDnfClauseTrivial :: [Formula] -> Bool
+isDnfClauseTrivial literals =
+  let (pos, negs) = Data.List.partition isPositive literals
+  in Set.intersect (map negate negs) pos /= []
+
+--- Helper function, makes sure the clauses don't include proper subsets
+--- of each other
+subsume :: [[Formula]] -> [[Formula]]
+subsume cls = filter (\cl -> not (any (`Set.isProperSubset` cl)
+                                  cls)) cls
+
+simpDNF :: Formula -> [[Formula]]
+simpDNF F = []
+simpDNF T = [[]]
+simpDNF fm = (subsume . filter (not . isDnfClauseTrivial) . pureDNF . toNNF) fm
+
+-- | Determines the DNF using sets, then collects the clauses by
+-- iteratively joining them 'Or'-d together.
+toDNF :: Formula -> Formula
+toDNF fm = foldrDisj (map foldlConj (simpDNF fm))
+
+pureCNF :: Formula -> [[Formula]]
+pureCNF = map (map negate) . pureDNF . toNNF . negate
+
+simpCNF :: Formula -> [[Formula]]
+simpCNF F = []
+simpCNF T = [[]]
+simpCNF fm = let cjs = filter (not . isDnfClauseTrivial) (pureCNF $ toNNF fm)
+             in filter (\c -> not $ any (`Set.isProperSubset` c) cjs) cjs
+
+toCNF :: Formula -> Formula
+toCNF fm = foldlConj (map foldrDisj (simpCNF fm))

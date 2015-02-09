@@ -57,4 +57,5 @@ tautologyTests _ =
                  (And (Or (Not p) (Or q s))
                       (Or (Not p) (Or (Not r) s))))]
 
-main = putStrLn (tautologyTests())
+main = putStrLn $ (show (foldlConj [(Atom "a"), (Atom "b"), (Atom "c")]))++"\n"++ (show (foldl And T [(Atom "a"), (Atom "b"), (Atom "c")]))
+
