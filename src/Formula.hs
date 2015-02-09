@@ -296,6 +296,8 @@ nnfToDNF fm = fm
 allPairs :: Ord c => (a -> b -> c) -> [a] -> [b] -> [c]
 allPairs f xs ys = Set.setify [f x y | x <- xs, y <- ys]
 
+-- | Given a formula in NNF, convert it to a list of clauses, where each
+-- clause is represented as a list of literals.
 pureDNF :: Formula -> [[Formula]]
 pureDNF fm = case fm of
   And p q -> Set.setify $ allPairs Set.union (pureDNF p) (pureDNF q)
@@ -317,6 +319,8 @@ subsume :: [[Formula]] -> [[Formula]]
 subsume cls = filter (\cl -> not (any (`Set.isProperSubset` cl)
                                   cls)) cls
 
+-- | Takes a given formula, then produces a list of clauses which are
+-- nontrivial and no clause is subsumed in any other.
 simpDNF :: Formula -> [[Formula]]
 simpDNF F = []
 simpDNF T = [[]]
