@@ -219,8 +219,8 @@ toNNF' fm = case fm of
   Not (And p q)     -> Or (toNNF' (Not p)) (toNNF' (Not q))
   Not (Or p q)      -> And (toNNF' (Not p)) (toNNF' (Not q))
   Not (Implies p q) -> And (toNNF' p) (toNNF' (Not q))
-  Not (Iff p q)     -> Or (And (toNNF' p) (toNNF' q))
-                          (And (toNNF' (Not p)) (toNNF' (Not q)))
+  Not (Iff p q)     -> Or (And (toNNF' (Not p)) (toNNF' q))
+                          (And (toNNF' p) (toNNF' (Not q)))
   _                 -> fm
 
 toNNF :: Formula -> Formula
