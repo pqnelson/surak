@@ -301,7 +301,7 @@ allPairs f xs ys = Set.setify [f x y | x <- xs, y <- ys]
 pureDNF :: Formula -> [[Formula]]
 pureDNF fm = case fm of
   And p q -> Set.setify $ allPairs Set.union (pureDNF p) (pureDNF q)
-  Or p q  -> Set.union (pureDNF p) (pureDNF q)
+  Or p q  -> pureDNF p `Set.union` pureDNF q
   _       -> [[fm]]
 
 negate :: Formula -> Formula
