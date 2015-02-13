@@ -229,7 +229,7 @@ toNNF = toNNF' . simplifyProp
 toNENF' :: Formula -> Formula
 toNENF' fm = case fm of
   Not (Not p)       -> toNENF' p
-  Not (And p q)     -> Or (toNENF' p) (toNENF' q)
+  Not (And p q)     -> Or (toNENF' (Not p)) (toNENF' (Not q))
   Not (Implies p q) -> And (toNENF' p) (toNENF' (Not q))
   Not (Iff p q)     -> Iff (toNENF' p) (toNENF' (Not q))
   And p q           -> And (toNENF' p) (toNENF' q)
