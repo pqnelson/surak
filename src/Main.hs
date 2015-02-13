@@ -18,8 +18,8 @@ testToStr fm = let result = isTautology fm
                   else "...True\n"
 
 -- | A number of tests taken from Francis Pelletier's "Seventy-Five
--- Problems for Testing Automatic Theorem Provers" /Journal of Automated
--- Reasoning/ _2_ (1986) 191-216
+-- Problems for Testing Automatic Theorem Provers"
+-- /Journal of Automated Reasoning/ __2__ (1986) 191-216
 pelletierTest :: [Formula]
 pelletierTest = [(Iff (Implies p q) (Implies (Not q) (Not p))),
                  (Iff (Not (Not p)) p),

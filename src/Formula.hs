@@ -101,11 +101,11 @@ atoms :: Formula -> [PropVar]
 atoms = Set.setify . rawAtoms
 
 -- | Valuations simply evaluate any given propositional variable as
--- either 'True' or 'False'
+-- either @True@ or @False@
 type Valuation = PropVar -> Bool
 
--- | Given a 'Valuation', determine whether a 'Formula' evaluates to 'True'
--- or 'False'. 
+-- | Given a 'Valuation', determine whether a 'Formula' evaluates to @True@
+-- or @False@.
 eval :: Formula -> Valuation -> Bool
 eval f v = case f of
   F           -> False
@@ -117,15 +117,15 @@ eval f v = case f of
   Implies p q -> not (eval p v) || eval q v
   Iff p q     -> eval p v == eval q v
 
--- | This acts like a "hook", extending a function 'f' to '(p |-> y) f'
--- which will map 'p' to 'y', and any other propositional variable 'q' to
--- 'f q'.
+-- | This acts like a "hook", extending a function @f@ to @(p |-> y) f@
+-- which will map @p@ to @y@, and any other propositional variable @q@ to
+-- @f q@.
 (|->) :: PropVar -> a -> (PropVar -> a) -> PropVar -> a
 (|->) p y f p' = if p' == p then y else f p'
 
 -- | Recursively constructs all possible valuations on a given list of
--- atoms, then calls 'subfn' on each resulting valuation, "folds" them
--- together with '&&'. Used for checking validity and satisfiability.
+-- atoms, then calls @subfn@ on each resulting valuation, "folds" them
+-- together with @&&@. Used for checking validity and satisfiability.
 onAllValuations :: (Valuation -> Bool) -> Valuation -> [PropVar] -> Bool
 onAllValuations subfn v ats = case ats of
   []   -> subfn v
@@ -145,16 +145,21 @@ isSatisfiable :: Formula -> Bool
 isSatisfiable = not . isUnsatisfiable
 
 
-{- utility functions -}
+-- | Checks if a formula is just an atom, or a negated atom
 isLiteral :: Formula -> Bool
 isLiteral (Atom _) = True
 isLiteral (Not (Atom _)) = True
 isLiteral _ = False
 
+-- | Checks if the formula is negated; note this is purely syntactic,
+-- the semantical content of the formula is not considered. If it is not
+-- 'Not' whatever, it's false.
 isNegative :: Formula -> Bool
 isNegative (Not _) = True
 isNegative _ = False
 
+-- | This is simply the negation of 'isNegative', since a formula is
+-- either positive or negative
 isPositive :: Formula -> Bool
 isPositive = not . isNegative
 
@@ -170,6 +175,11 @@ dual fm = case fm of
   Or p q  -> And (dual p) (dual q)
   _       -> error "dual called on formula involving 'Implies' or 'Iff'"
 
+-- | Given a 'PropVar' and some 'Formula' to substitute for it, simply
+-- replace all instances of the given variable.
+--
+-- >>> propSubstitute "a" (Iff (Atom "p") (Atom "q")) (Implies (Atom "A") F)
+-- Implies (Iff (Atom "p") (Atom "q")) F
 propSubstitute :: PropVar -> Formula -> Formula -> Formula
 propSubstitute x y = mapAtoms (\a -> if a == x then y else Atom a)
 
@@ -223,6 +233,7 @@ toNNF' fm = case fm of
                           (And (toNNF' p) (toNNF' (Not q)))
   _                 -> fm
 
+-- | Converts a formula to negation normal form.
 toNNF :: Formula -> Formula
 toNNF = toNNF' . simplifyProp
 
@@ -238,6 +249,14 @@ toNENF' fm = case fm of
   Iff p q           -> Iff (toNENF' p) (toNENF' q)
   _                 -> fm
 
+-- | Converts a formula to pseudo-negation normal form...it does not
+-- alter 'Iff' connectives.
+--
+-- >>> toNENF (Iff (Atom "a") (Atom "b"))
+-- (Iff a b)
+--
+-- >>> toNENF (Implies (Iff (Atom "a") (Atom "b")) (Atom "c"))
+-- Or (Iff a (Not b)) c
 toNENF :: Formula -> Formula
 toNENF = toNENF' . simplifyProp
 
@@ -258,22 +277,25 @@ foldlConj (f:fs) = And (foldlConj fs) f
 foldrDisj :: [Formula] -> Formula
 foldrDisj = foldr Or F
 
--- | Get all valuations which satisfy some property 'prop'
+-- | Get all valuations which satisfy some property @prop@
 allValuationsSatisfying :: (Valuation -> Bool) -> Valuation -> [PropVar] -> [Valuation]
 allValuationsSatisfying p v [] = [v | p v]
 allValuationsSatisfying p v (a:pvs) =
   allValuationsSatisfying p ((a |-> False) v) pvs
   ++ allValuationsSatisfying p ((a |-> True) v) pvs
 
--- | Given a list of propositional variables and a fixed valuation 'v', map
--- the propositional variables through 'if eval (Atom _) v then (toAtom
--- _) else (Not (toAtom _))', the 'foldlConj' the resulting formulas all
--- together 
+-- | Given a list of propositional variables and a fixed valuation @v@, map
+-- the propositional variables through
+-- @if eval (Atom _) v then (toAtom _) else (Not (toAtom _))@
+-- and then 'foldlConj' the resulting formulas all together 
 makeLiterals :: [PropVar] -> Valuation -> Formula
 makeLiterals ats v = foldlConj (map ((\p -> if eval p v then p else Not p)
                                      . Atom)
                                 ats)
 
+-- | Converts a formula to DNF by examining the truth table of the given
+-- formula. As the name suggests, this is a naive approach, and shouldn't
+-- be used in production.
 naiveToDNF :: Formula -> Formula
 naiveToDNF fm =
   let ats = atoms fm
@@ -304,6 +326,7 @@ pureDNF fm = case fm of
   Or p q  -> pureDNF p `Set.union` pureDNF q
   _       -> [[fm]]
 
+--- Negates a formula, simplifies @Not (Not p)@ to @p@.
 negate :: Formula -> Formula
 negate (Not fm) = fm
 negate fm = Not fm
@@ -327,7 +350,7 @@ simpDNF T = [[]]
 simpDNF fm = (subsume . filter (not . isDnfClauseTrivial) . pureDNF . toNNF) fm
 
 -- | Determines the DNF using sets, then collects the clauses by
--- iteratively joining them 'Or'-d together.
+-- iteratively joining them @Or@-d together.
 toDNF :: Formula -> Formula
 toDNF fm = foldrDisj (map foldlConj (simpDNF fm))
 
@@ -340,5 +363,6 @@ simpCNF T = [[]]
 simpCNF fm = let cjs = filter (not . isDnfClauseTrivial) (pureCNF $ toNNF fm)
              in filter (\c -> not $ any (`Set.isProperSubset` c) cjs) cjs
 
+-- | Converts a formula to conjunctive normal form.
 toCNF :: Formula -> Formula
 toCNF fm = foldlConj (map foldrDisj (simpCNF fm))
