@@ -19,7 +19,9 @@ module DavisPutnam
        , dpll
        ) where
 import qualified Data.List
+import qualified Data.Map as Map
 import qualified Set
+import Data.Maybe
 import Prelude hiding (negate)
 import Formula hiding (isTautology, isSatisfiable, isUnsatisfiable)
 
@@ -99,7 +101,7 @@ frequencies clauses p = let m = length $ filter (elem p) clauses
                         in (m+n, p)
 
 getLiterals :: [[Formula]] -> [Formula]
-getLiterals clauses = let (pos,neg) = Data.List.Partition isPositive
+getLiterals clauses = let (pos,neg) = Data.List.partition isPositive
                                       $ Set.unions clauses
                       in Set.union pos (map negate neg)
 
@@ -114,6 +116,95 @@ dpll clauses = if [] `elem` clauses then False else
                                    lcounts = map (frequencies clauses) pvs 
                                    (_, p) = Data.List.maximum lcounts
                                in dpll (Set.insert [p] clauses)
-                                  || dpll (Set.insert [(negate p)] clauses)
+                                  || dpll (Set.insert [negate p] clauses)
 
+{-
+  The following code is idiosyncratic, and has to do with backtracking
+  in the DPLL algorithm.
+-}
 
+data TrailMix = Deduced | Guessed deriving (Eq, Ord)
+
+type Trail = (Formula, TrailMix)
+type Clauses = [[Formula]]
+type Clause = [Formula]
+
+-- | Updates the clauses to remove literals which may belong to the trail,
+-- as specified by the map.
+removeTrailedLits :: Map.Map Formula Formula -> Clauses -> Clauses
+removeTrailedLits m = map (filter ((`Map.member` m) . negate))
+
+-- | Given a 'Map.Map Formula Formula', and a list '[Formula]',
+-- for each element in our list, check if it's a member of the map;
+-- if so, map it to 'Just fm', otherwise map it to 'Nothing'.
+maybeInclude :: Map.Map Formula Formula -> [Formula] -> [Maybe Formula]
+maybeInclude m (c:cls) = if Map.member c m
+                         then Nothing : maybeInclude m cls
+                         else Just c : maybeInclude m cls
+maybeInclude _ [] = []
+
+litAbs :: Formula -> Formula
+litAbs (Not p) = p
+litAbs fm = fm
+
+-- | All the literals in the clauses not yet assigned to the trail yet.
+unassigned :: Clauses -> [Trail] -> [Formula]
+unassigned cls trail = Set.difference
+                       (Set.unions (Set.image (Set.image litAbs) cls))
+                       (Set.image (litAbs . fst) trail)
+
+-- | Get all the units from the clauses which are undefined according
+-- to our dictionary.
+undefinedUnits :: Map.Map Formula Formula -> Clauses -> [Formula]
+undefinedUnits m = Set.unions . map (catMaybes . maybeInclude m)
+
+-- | We keep track of the trail history in the @Map.Map Formula Formula@
+-- parameter, the given clause is the first parameter, and the @[Trail]@
+-- stars as itself.
+unitSubpropagate :: (Clauses, Map.Map Formula Formula, [Trail])
+                    -> (Clauses, Map.Map Formula Formula, [Trail])
+unitSubpropagate (cls, m, trail) =
+  let cls' = removeTrailedLits m cls
+      newunits = undefinedUnits m cls'
+  in if null newunits
+     then (cls', m, trail)
+     else let trail' = foldr (\l t -> (l, Deduced):t) trail newunits
+              m' = foldr (\l mp -> Map.insert l l mp) m newunits
+          in (cls', m', trail')
+
+-- | Unit propagation using the newfangled 'Trail'.
+btUnitPropagation :: (Clauses, [Trail]) -> (Clauses, [Trail])
+btUnitPropagation (cls, trail) =
+  let m = foldr (\(l,_) mp -> Map.insert l l mp) Map.empty trail
+      (cls', _, trail') = unitSubpropagate (cls, m, trail)
+  in (cls', trail')
+
+-- | Backtrack the trail until we found the last guess which caused problems.
+backtrack :: [Trail] -> [Trail]
+backtrack ((_, Deduced):tt) = backtrack tt
+backtrack ((_, Guessed):tt) = tt
+backtrack [] = []
+
+-- | The DPLL algorithm with backtracking.
+dpli :: Clauses -> [Trail] -> Bool
+dpli cls trail =
+  let (cls', trail') = btUnitPropagation (cls, trail)
+  in if [] `elem` cls'                            --- if we get the empty clause
+     then case backtrack trail of                 --- backtrack until
+           (p, Guessed):tt                        --- we guessed last
+             -> dpli cls ((negate p, Deduced):tt) --- and guess again!
+           _ -> False                             --- unless we can't
+     else case unassigned cls trail of --- otherwise
+           [] -> True   --- it's satisfiable if there are no unassigned literals
+           ps -> let (_, p) = Data.List.maximum
+                              $ map (frequencies cls') ps
+                 in dpli cls ((p, Guessed):trail') --- recur with the next
+                                                   --- best guess
+
+-- | Test for satisfiability using 'dplii'
+dplisat :: Formula -> Bool
+dplisat fm = dpli (defCNFClauses fm) []
+
+-- | Test for validity using 'dplii'
+dplitaut :: Formula -> Bool
+dplitaut = not . dplisat . Not
