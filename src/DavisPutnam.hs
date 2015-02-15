@@ -16,6 +16,7 @@ module DavisPutnam
        , isTautology
        , isSatisfiable
        , isUnsatisfiable
+       , dpll
        ) where
 import qualified Data.List
 import qualified Set
@@ -91,3 +92,28 @@ isUnsatisfiable = not . isSatisfiable
 
 isTautology :: Formula -> Bool
 isTautology fm = not $ isSatisfiable (Not fm)
+
+frequencies :: [[Formula]] -> Formula -> (Int, Formula)
+frequencies clauses p = let m = length $ filter (elem p) clauses
+                            n = length $ filter (elem (Not p)) clauses
+                        in (m+n, p)
+
+getLiterals :: [[Formula]] -> [Formula]
+getLiterals clauses = let (pos,neg) = Data.List.Partition isPositive
+                                      $ Set.unions clauses
+                      in Set.union pos (map negate neg)
+
+dpll :: [[Formula]] -> Bool
+dpll [] = True
+dpll clauses = if [] `elem` clauses then False else
+                 case oneLiteralRule clauses of
+                  Just clauses' -> dpll clauses'
+                  Nothing -> case affirmitiveNegativeRule clauses of
+                    Just clauses' -> dpll clauses'
+                    Nothing -> let pvs = getLiterals clauses
+                                   lcounts = map (frequencies clauses) pvs 
+                                   (_, p) = Data.List.maximum lcounts
+                               in dpll (Set.insert [p] clauses)
+                                  || dpll (Set.insert [(negate p)] clauses)
+
+
