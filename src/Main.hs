@@ -10,6 +10,7 @@ This just runs 16 tests from the literature.
 -}
 module Main where
 import Formula
+import qualified DavisPutnam as DP
 
 testToStr :: Formula -> String
 testToStr fm = let result = isTautology fm
@@ -68,7 +69,22 @@ toCnfTests :: () -> String
 toCnfTests _ =
   foldr (++) ""
   $ map (\fm -> (testToStr (Iff fm (toCNF fm)))) pelletierTest
-  
+
+textbookDefCNFTest :: () -> String
+textbookDefCNFTest _ =
+  testToStr (Iff (And (Or p (And q (Not r))) s)
+                 (And (Iff p1 (And q (Not r)))
+                      (And (Iff p2 (Or p p1))
+                           (And (Iff p3 (And p2 s))
+                                p3))))
+  where p = Atom "p"
+        q = Atom "q"
+        r = Atom "r"
+        s = Atom "s"
+        p1 = Atom "p1"
+        p2 = Atom "p2"
+        p3 = Atom "p3"
+             
 main :: IO ()
 main = putStrLn ("Tautology tests...\n"
                  ++ (tautologyTests ())

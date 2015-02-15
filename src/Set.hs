@@ -16,12 +16,15 @@ module Set
        , uniq
        , insert
        , union
+       , unions
        , intersect
        , isSubset
        , isProperSubset
        , powerSet
+       , difference
        , (\\)
        , remove
+       , image
        ) where
 import qualified Data.List as List
 
@@ -47,6 +50,10 @@ union' s1@(h1:t1) s2@(h2:t2) = case compare h1 h2 of
 -- | The union of two sets.
 union :: Ord a => [a] -> [a] -> [a]
 union l1 l2 = union' (setify l1) (setify l2)
+
+-- | The union of an arbitrary number of lists
+unions :: Ord a => [[a]] -> [a]
+unions = setify . List.concat
 
 intersect' :: Ord a => [a] -> [a] -> [a]
 intersect' [] _ = []
@@ -84,18 +91,22 @@ powerSet [] = [[]]
 powerSet (a:t) = let acc = powerSet t
                  in map (a:) acc ++ acc
 
-subtractSet :: Ord a => [a] -> [a] -> [a]
-subtractSet [] _ = []
-subtractSet s1 [] = s1
-subtractSet s1@(h1:t1) s2@(h2:t2) = case compare h1 h2 of
-                                     EQ -> subtractSet t1 t2
-                                     LT -> h1 : subtractSet t1 s2
-                                     GT -> subtractSet s1 t2
+difference :: Ord a => [a] -> [a] -> [a]
+difference [] _ = []
+difference s1 [] = s1
+difference s1@(h1:t1) s2@(h2:t2) = case compare h1 h2 of
+                                    EQ -> difference t1 t2
+                                    LT -> h1 : difference t1 s2
+                                    GT -> difference s1 t2
 
 -- | The set difference of the first list minus the second list
 (\\) :: Ord a => [a] -> [a] -> [a]
-s1 \\ s2 = subtractSet (setify s1) (setify s2)
+s1 \\ s2 = difference (setify s1) (setify s2)
 
 -- | Removes a single element from a set
 remove :: Ord a => [a] -> a -> [a]
 remove s1 elt = s1 \\ [elt]
+
+-- | Setify the results of a map
+image :: Ord b => (a -> b) -> [a] -> [b]
+image f = setify . map f

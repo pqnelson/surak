@@ -26,6 +26,7 @@ module Formula
        , isNegative
        , isPositive
        , dual
+       , negate
        , simplifyProp
        , propSubstitute
        , toNNF
@@ -37,10 +38,16 @@ module Formula
        , pureDNF
        , toDNF
        , toCNF
+       , defCNFClauses
+       , toDefCNF
+       , maxVarIndex
        ) where
 import Prelude hiding (negate)
 import qualified Set
 import qualified Data.List
+import qualified Data.Map as Map
+import Data.Map(Map)
+import Data.Maybe
 
 -- | We're working with propositional calculus in this version, so we
 -- need to keep track of propositional variables. 
@@ -366,3 +373,91 @@ simpCNF fm = let cjs = filter (not . isDnfClauseTrivial) (pureCNF $ toNNF fm)
 -- | Converts a formula to conjunctive normal form.
 toCNF :: Formula -> Formula
 toCNF fm = foldlConj (map foldrDisj (simpCNF fm))
+
+-- | Helper functions for toDefCNF
+maybeRead :: Read a => String -> Maybe a
+maybeRead = fmap fst . listToMaybe . reads
+
+maxVarIndex :: String -> String -> Int -> Int
+maxVarIndex pfx s n =
+  let m = length pfx
+      l = length s
+  in if l <= m || take m s /= pfx
+     then n
+     else let s' = take (l-m) (drop m s)
+          in case maybeRead s'
+             of Nothing -> n
+                Just n' -> max n n'
+
+makeProp :: Int -> (Formula, Int)
+makeProp n = (Atom ("p_" ++ show n), n+1)
+
+-- | A triple tracking the formula to be transformed,
+-- definitions made so far (as a dictionary, well 'Data.Map'),
+-- and the current variable index counter.
+type Trip = (Formula, Map Formula (Formula, Formula), Int)
+
+-- | Iteratively transform a formula, represented as a 'Trip', into
+-- set-based definitional conjunctive normal form.
+mainCNF :: Trip -> Trip
+mainCNF (trip@(fm, _, _)) = case fm of
+  And p q -> defstep And (p, q) trip
+  Or p q  -> defstep Or (p, q) trip
+  Iff p q -> defstep Iff (p, q) trip
+  _       -> trip
+
+-- | Takes a binary connective, an ordered pair of formulas, and a 'Trip'
+-- then transforms this into another 'Trip'
+defstep :: (Formula -> Formula -> Formula) -> (Formula, Formula) -> Trip -> Trip
+defstep op (p, q) (_, defs, n) =
+  let (fm1, defs1, n1) = mainCNF (p, defs, n)
+      (fm2, defs2, n2) = mainCNF (q, defs1, n1)
+      fm' = op fm1 fm2
+  in case Map.lookup fm' defs2 of
+      Just (v, _) -> (v, defs, n2)
+      Nothing -> (v, Map.insert fm' (v, Iff v fm') defs2, n3)
+        where (v, n3) = makeProp n2
+
+
+-- | Transform the clauses to definitional CNF, and return the set-based
+-- representation of the given formula.
+mkDefCNF :: (Trip -> Trip) -> Formula -> [[Formula]]
+mkDefCNF fn fm =
+  let fm' = toNENF fm
+      n = 1 + foldr (maxVarIndex "p_" . show) 0 (atoms fm')
+      (fm'', defs, _) = fn (fm', Map.empty, n)
+      deflist = map (snd . snd) (Map.toList defs)
+  in Set.unions $ simpCNF fm'' : map simpCNF deflist
+
+-- | Converts a formula to definitional conjunctive normal form.
+--
+-- | In general, fails to produce a formula logically equivalent to the input
+--
+-- prop> not $ isTautology (Iff fm (naiveToDefCNF fm))
+naiveToDefCNF :: Formula -> Formula
+naiveToDefCNF fm = foldlConj $ map foldrDisj $ mkDefCNF mainCNF fm
+
+-- | A generalized version of defstep
+subCNF :: (Trip -> Trip) -> (Formula -> Formula -> Formula)
+          -> (Formula, Formula) -> Trip -> Trip
+subCNF subfn op (p, q) (_, defs, n) =
+  let (fm1, defs1, n1) = subfn (p, defs, n)
+      (fm2, defs2, n2) = subfn (q, defs1, n1)
+  in (op fm1 fm2, defs2, n2)
+
+orCNF :: Trip -> Trip
+orCNF trip@(fm, _, _) = case fm of
+  Or p q -> subCNF orCNF Or (p, q) trip
+  _      -> mainCNF trip
+
+andCNF :: Trip -> Trip
+andCNF trip@(fm, _, _) = case fm of
+  And p q -> subCNF andCNF And (p, q) trip
+  _       -> orCNF trip
+
+defCNFClauses :: Formula -> [[Formula]]
+defCNFClauses = mkDefCNF andCNF
+
+-- | A slightly optimized way to convert a formula to definitional CNF.
+toDefCNF :: Formula -> Formula
+toDefCNF = foldlConj . map foldrDisj . defCNFClauses
