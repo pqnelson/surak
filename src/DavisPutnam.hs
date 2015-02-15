@@ -107,8 +107,9 @@ getLiterals clauses = let (pos,neg) = Data.List.partition isPositive
 
 dpll :: [[Formula]] -> Bool
 dpll [] = True
-dpll clauses = if [] `elem` clauses then False else
-                 case oneLiteralRule clauses of
+dpll clauses = if [] `elem` clauses
+               then False
+               else case oneLiteralRule clauses of
                   Just clauses' -> dpll clauses'
                   Nothing -> case affirmitiveNegativeRule clauses of
                     Just clauses' -> dpll clauses'
@@ -129,10 +130,10 @@ type Trail = (Formula, TrailMix)
 type Clauses = [[Formula]]
 type Clause = [Formula]
 
--- | Updates the clauses to remove literals which may belong to the trail,
--- as specified by the map.
-removeTrailedLits :: Map.Map Formula Formula -> Clauses -> Clauses
-removeTrailedLits m = map (filter ((`Map.member` m) . negate))
+-- | Updates the clauses to remove negated literals which do not belong to
+-- the trail, as specified by the map.
+removeTrailedNegLits :: Map.Map Formula Formula -> Clauses -> Clauses
+removeTrailedNegLits m = map (filter (not . (`Map.member` m) . negate))
 
 -- | Given a 'Map.Map Formula Formula', and a list '[Formula]',
 -- for each element in our list, check if it's a member of the map;
@@ -147,12 +148,6 @@ litAbs :: Formula -> Formula
 litAbs (Not p) = p
 litAbs fm = fm
 
--- | All the literals in the clauses not yet assigned to the trail yet.
-unassigned :: Clauses -> [Trail] -> [Formula]
-unassigned cls trail = Set.difference
-                       (Set.unions (Set.image (Set.image litAbs) cls))
-                       (Set.image (litAbs . fst) trail)
-
 -- | Get all the units from the clauses which are undefined according
 -- to our dictionary.
 undefinedUnits :: Map.Map Formula Formula -> Clauses -> [Formula]
@@ -164,7 +159,7 @@ undefinedUnits m = Set.unions . map (catMaybes . maybeInclude m)
 unitSubpropagate :: (Clauses, Map.Map Formula Formula, [Trail])
                     -> (Clauses, Map.Map Formula Formula, [Trail])
 unitSubpropagate (cls, m, trail) =
-  let cls' = removeTrailedLits m cls
+  let cls' = removeTrailedNegLits m cls
       newunits = undefinedUnits m cls'
   in if null newunits
      then (cls', m, trail)
@@ -182,8 +177,14 @@ btUnitPropagation (cls, trail) =
 -- | Backtrack the trail until we found the last guess which caused problems.
 backtrack :: [Trail] -> [Trail]
 backtrack ((_, Deduced):tt) = backtrack tt
-backtrack ((_, Guessed):tt) = tt
+backtrack tt@((_, Guessed):_) = tt
 backtrack [] = []
+
+-- | All the literals in the clauses not yet assigned to the trail yet.
+unassigned :: Clauses -> [Trail] -> [Formula]
+unassigned cls trail = Set.difference
+                       (Set.unions (Set.image (Set.image litAbs) cls))
+                       (Set.image (litAbs . fst) trail)
 
 -- | The DPLL algorithm with backtracking.
 dpli :: Clauses -> [Trail] -> Bool
@@ -208,3 +209,36 @@ dplisat fm = dpli (defCNFClauses fm) []
 -- | Test for validity using 'dplii'
 dplitaut :: Formula -> Bool
 dplitaut = not . dplisat . Not
+
+backjump :: Clauses -> Formula -> [Trail] -> [Trail]
+backjump cls p trail =
+  case backtrack trail of
+   ((q, Guessed):tt) ->
+     let (cls', trail') = btUnitPropagation (cls, (p,Guessed):tt)
+     in if [] `elem` cls'
+        then backjump cls p tt
+        else trail
+   _ -> trail
+
+guessedLiterals :: [Trail] -> [Trail]
+guessedLiterals ((p, Guessed):tt) = (p, Guessed):guessedLiterals tt
+guessedLiterals ((_, Deduced):tt) = guessedLiterals tt
+guessedLiterals [] = []
+
+dplb :: Clauses -> [Trail] -> Bool
+dplb cls trail =
+  let (cls', trail') = btUnitPropagation (cls, trail)
+      hasConflicts = ([] `elem`)
+  in if hasConflicts cls'
+     then case backtrack trail of
+           ((p, Guessed):tt) -> let trail'' = backjump cls p tt
+                                    declits = guessedLiterals trail''
+                                    conflict = Set.insert (negate p)
+                                               (Set.image (negate . fst) declits)
+                                in dplb (conflict:cls) ((negate p, Deduced):trail'')
+           _ -> False
+     else case unassigned cls trail' of
+           [] -> True
+           ps -> let (_,p) = Data.List.maximum
+                             $ map (frequencies cls') ps
+                 in dplb cls ((p, Guessed):trail')
