@@ -130,6 +130,8 @@ nnfToDNF (Or p q) = Or (nnfToDNF p) (nnfToDNF q)
 nnfToDNF fm = fm
 
 --- Helper function
+--- XXX: performance-wise, this is a horrible function; low hanging
+--- fruit would be to optimize this function
 allPairs :: Ord c => (a -> b -> c) -> [a] -> [b] -> [c]
 allPairs f xs ys = Set.setify [f x y | x <- xs, y <- ys]
 

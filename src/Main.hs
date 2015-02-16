@@ -108,7 +108,7 @@ pelletierTest' = [(Iff (Implies (Atom "p1") (Atom "q1"))
 -- slow the naive CNF and DNF algorithms are on this stress test, even
 -- on a modern computer with 8 processors and 12 Gigs of RAM.
 pelletierTest :: [Formula]
-pelletierTest = pelletierTest' ++ [foldr Iff T (take 5 pelletierTest')]
+pelletierTest = pelletierTest' ++ [foldr Iff T pelletierTest']
 
 -- | Iteratively 'testToStr' each 'pelletierTest'.
 tautologyTests :: () -> String
@@ -151,9 +151,5 @@ textbookDefCNFTest _ =
 -- prints out the results, then terminates.
 main :: IO ()
 main = putStrLn ("Tautology tests...\n"
-                 ++ (tautologyTests ())
-                 ++ "\nConverting to CNF tests...\n"
-                 ++ (toCnfTests ())
-                 ++ "\nConverting to NNF tests...\n"
-                 ++ (toNnfTests ()))
+                 ++ (tautologyTests ()))
 
