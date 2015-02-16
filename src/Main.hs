@@ -13,6 +13,9 @@ import Formula
 import NormalForm
 import qualified DavisPutnam as DP
 
+-- | Given a formula, see if it's valid using 'DavisPutnam.isTautology'
+-- If it is, just return "...True\\n". Otherwise print the formula and
+-- the result.
 testToStr :: Formula -> String
 testToStr fm = let result = DP.isTautology fm
                in if not result
@@ -27,6 +30,7 @@ pierceLawTest = let p = Atom "p8"
                     q = Atom "q8"
                 in Implies (Implies (Implies p q) p) p
 
+-- | The ninth Pelletier test, written here for clarity's sake.
 pelletierTestNine :: Formula
 pelletierTestNine = let p = Atom "p9"
                         q = Atom "q9"
@@ -36,7 +40,7 @@ pelletierTestNine = let p = Atom "p9"
                                 (Not (Or (Not p)
                                          (Not q))))
 
---- Modified version of Problem 10
+-- | Modified version of Problem 10, /a la/ natural deduction.
 pelletierTestTen :: Formula
 pelletierTestTen = let p = Atom "p10"
                        q = Atom "q10"
@@ -46,6 +50,7 @@ pelletierTestTen = let p = Atom "p10"
                                          (Implies p (Or q r))))
                                (Iff p q))
 
+-- | The original first 17 Pelletier tests.
 pelletierTest' :: [Formula]
 pelletierTest' = [(Iff (Implies (Atom "p1") (Atom "q1"))
                        (Implies (Not (Atom "q1")) (Not (Atom "p1")))),
@@ -105,21 +110,28 @@ pelletierTest' = [(Iff (Implies (Atom "p1") (Atom "q1"))
 pelletierTest :: [Formula]
 pelletierTest = pelletierTest' ++ [foldr Iff T (take 5 pelletierTest')]
 
+-- | Iteratively 'testToStr' each 'pelletierTest'.
 tautologyTests :: () -> String
 tautologyTests _ =
   foldr (++) ""
   $ map testToStr pelletierTest
 
+-- | Checks each 'pelletierTest' @fm@ produces a tautology
+-- @Iff fm (toNNF fm)@. It's used to test 'toNNF' as working correctly.
 toNnfTests :: () -> String
 toNnfTests _ =
   foldr (++) ""
   $ map (\fm -> (testToStr (Iff fm (toNNF fm)))) pelletierTest
 
+-- | Checks each 'pelletierTest' @fm@ produces a tautology
+-- @Iff fm (toCNF fm)@. It's used to test 'toCNF' as working correctly.
 toCnfTests :: () -> String
 toCnfTests _ =
   foldr (++) ""
   $ map (\fm -> (testToStr (Iff fm (toCNF fm)))) pelletierTest
 
+-- | Show that a formula in definitional conjunctive normal form is not
+-- logically equivalent to the original formula.
 textbookDefCNFTest :: () -> String
 textbookDefCNFTest _ =
   testToStr (Iff (And (Or p (And q (Not r))) s)
@@ -134,7 +146,9 @@ textbookDefCNFTest _ =
         p1 = Atom "p1"
         p2 = Atom "p2"
         p3 = Atom "p3"
-             
+
+-- | Checks the 'tautologyTests', the 'toCnfTests', and the 'toNnfTests',
+-- prints out the results, then terminates.
 main :: IO ()
 main = putStrLn ("Tautology tests...\n"
                  ++ (tautologyTests ())

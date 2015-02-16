@@ -70,7 +70,6 @@ toNENF' fm = case fm of
 --
 -- >>> toNENF (Iff (Atom "a") (Atom "b"))
 -- (Iff a b)
---
 -- >>> toNENF (Implies (Iff (Atom "a") (Atom "b")) (Atom "c"))
 -- Or (Iff a (Not b)) c
 toNENF :: Formula -> Formula
@@ -124,7 +123,7 @@ distrib (And p (Or q r)) = Or (distrib (And p q)) (distrib (And p r))
 distrib (And (Or p q) r) = Or (distrib (And p r)) (distrib (And q r))
 distrib fm = fm
 
--- | Converts an NNF to a DNF by iteratively applying 'distrib'.
+-- | Converts an NNF to a DNF by iteratively applying 'Formula.distrib'.
 nnfToDNF :: Formula -> Formula
 nnfToDNF (And p q) = distrib (And (nnfToDNF p) (nnfToDNF q))
 nnfToDNF (Or p q) = Or (nnfToDNF p) (nnfToDNF q)
@@ -183,6 +182,10 @@ toCNF fm = foldlConj (map foldrDisj (simpCNF fm))
 maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . reads
 
+-- | Given a prefix, a string, and a possible candidate for the index
+-- counter value, check if the string looks like 'prefix ++ (number)'.
+-- If so, return the maximum of the parsed number and the candidate
+-- value parameter; otherwise, just return the candidate value.
 maxVarIndex :: String -> String -> Int -> Int
 maxVarIndex pfx s n =
   let m = length pfx
@@ -260,6 +263,8 @@ andCNF trip@(fm, _, _) = case fm of
   And p q -> subCNF andCNF And (p, q) trip
   _       -> orCNF trip
 
+-- | Given a formula, return the set-based representation of it in
+-- definition conjunctive normal form.
 defCNFClauses :: Formula -> [[Formula]]
 defCNFClauses = mkDefCNF andCNF
 

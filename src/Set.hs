@@ -91,6 +91,7 @@ powerSet [] = [[]]
 powerSet (a:t) = let acc = powerSet t
                  in map (a:) acc ++ acc
 
+-- | The set difference of the first list minus the second list.
 difference :: Ord a => [a] -> [a] -> [a]
 difference [] _ = []
 difference s1 [] = s1
@@ -99,7 +100,7 @@ difference s1@(h1:t1) s2@(h2:t2) = case compare h1 h2 of
                                     LT -> h1 : difference t1 s2
                                     GT -> difference s1 t2
 
--- | The set difference of the first list minus the second list
+-- | The 'difference' function as an infix operator. (Syntactic Sugar) 
 (\\) :: Ord a => [a] -> [a] -> [a]
 s1 \\ s2 = difference (setify s1) (setify s2)
 
