@@ -10,6 +10,7 @@ This just runs 16 tests from the literature.
 -}
 module Main where
 import Formula
+import NormalForm
 import qualified DavisPutnam as DP
 
 testToStr :: Formula -> String

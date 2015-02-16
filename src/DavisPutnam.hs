@@ -24,6 +24,7 @@ import qualified Set
 import Data.Maybe
 import Prelude hiding (negate)
 import Formula hiding (isTautology, isSatisfiable, isUnsatisfiable)
+import NormalForm
 
 isUnitClause :: [Formula] -> Bool
 isUnitClause (_:t) = null t
@@ -38,6 +39,9 @@ oneLiteralRule clauses = case Data.List.find isUnitClause clauses of
                                   clauses' = filter (notElem u) clauses
                           _ -> error "oneLiteralRule reached impossible state"
 
+-- | Attempts to eliminate literals that show up as _only positive_ or
+-- _only negative_. If this eliminates everything, it will return
+-- 'Nothing'; otherwise, it returns 'Just' the transformed clauses.
 affirmitiveNegativeRule :: [[Formula]] -> Maybe [[Formula]]
 affirmitiveNegativeRule clauses =
   let (neg', pos) = Data.List.partition isNegative (Set.unions clauses)
@@ -49,11 +53,9 @@ affirmitiveNegativeRule clauses =
       [] -> Nothing
       _ -> Just (filter (null . Set.intersect pure) clauses)
 
-trivial :: [Formula] -> Bool
-trivial literals =
-  let (pos, neg) = Data.List.partition isPositive literals
-  in Set.intersect pos (map negate neg) /= []
-
+-- | Gets rid of a literal (first argument) from the clauses (second argument)
+-- producing a new set of clauses without the literal showing up at all.
+-- Warning: the result could be huge.
 resolveOn :: Formula -> [[Formula]] -> [[Formula]]
 resolveOn p clauses =
   let p' = negate p
@@ -70,12 +72,15 @@ findBlowup cls l = let m = length(filter (elem l) cls)
                        n = length(filter (elem (negate l)) cls)
                    in (m*n - m - n, l)
 
+-- | A one-step resolution rule, which 'resolveOn' the literal
+-- determined by minimizing 'findBlowup' on the clauses.
 resolutionRule :: [[Formula]] -> [[Formula]]
 resolutionRule clauses =
   let pvs = filter isPositive (Set.unions clauses)
       (_, p) = Data.List.minimum $ map (findBlowup clauses) pvs
   in resolveOn p clauses
 
+-- | The original Davis-Putnam algorithm, in all its glory.
 dp :: [[Formula]] -> Bool
 dp [] = True
 dp clauses = if [] `elem` clauses
@@ -86,16 +91,24 @@ dp clauses = if [] `elem` clauses
                          Just clauses' -> dp clauses'
                          Nothing -> dp(resolutionRule clauses)
 
+-- | Given the clauses and a literal, return an ordered pair '(Int, Formula)'
+-- which gives how many times the literal (or its negation) appears in
+-- the clauses, and the literal being checked for.
 frequencies :: [[Formula]] -> Formula -> (Int, Formula)
 frequencies clauses p = let m = length $ filter (elem p) clauses
                             n = length $ filter (elem (Not p)) clauses
                         in (m+n, p)
 
+-- | Return all literals that occur in the formula, negated literals are
+-- transformed to be positive.
 getLiterals :: [[Formula]] -> [Formula]
 getLiterals clauses = let (pos,neg) = Data.List.partition isPositive
                                       $ Set.unions clauses
                       in Set.union pos (map negate neg)
 
+-- | The 1962 Davis-Putnam rule, which is slightly slicker.
+-- See Davis, Logemann, and Loveland's "A Machine Program for Theorem Proving"
+-- Comm. of the ACM, vol 5, no 7 (1962) pp 394-397 for the original reference.
 dpll :: [[Formula]] -> Bool
 dpll [] = True
 dpll clauses = if [] `elem` clauses
@@ -115,11 +128,14 @@ dpll clauses = if [] `elem` clauses
   in the DPLL algorithm.
 -}
 
+-- | Keep track of each step in the trail when we 'Guessed' or 'Deduced'
+-- a value in the valuation.
 data TrailMix = Deduced | Guessed deriving (Eq, Ord)
 
+-- | The Trail is just a step in the trail, keeping track of a 'Formula'
+-- and a 'TrailMix' explanation.
 type Trail = (Formula, TrailMix)
 type Clauses = [[Formula]]
-type Clause = [Formula]
 
 -- | Updates the clauses to remove negated literals which do not belong to
 -- the trail, as specified by the map.
@@ -134,10 +150,6 @@ maybeInclude m (c:cls) = if Map.member c m
                          then Nothing : maybeInclude m cls
                          else Just c : maybeInclude m cls
 maybeInclude _ [] = []
-
-litAbs :: Formula -> Formula
-litAbs (Not p) = p
-litAbs fm = fm
 
 -- | Get all the units from the clauses which are undefined according
 -- to our dictionary.
@@ -158,7 +170,9 @@ unitSubpropagate (cls, m, trail) =
               m' = foldr (\l mp -> Map.insert l l mp) m newunits
           in unitSubpropagate (cls', m', trail')
 
--- | Unit propagation using the newfangled 'Trail'.
+-- | Unit propagation using the newfangled 'Trail'. It amounts to making
+-- 'unitSubpropagate' doing all the work, and 'btUnitPropagation'
+-- getting all the glory.
 btUnitPropagation :: (Clauses, [Trail]) -> (Clauses, [Trail])
 btUnitPropagation (cls, trail) =
   let m = foldr (\(l,_) mp -> Map.insert l l mp) Map.empty trail
@@ -177,7 +191,7 @@ unassigned cls trail = Set.difference
                        (Set.unions (Set.image (Set.image litAbs) cls))
                        (Set.image (litAbs . fst) trail)
 
--- | The DPLL algorithm with backtracking.
+-- | The iterative DPLL algorithm with backtracking.
 dpli :: Clauses -> [Trail] -> Bool
 dpli cls trail =
   let (cls', trail') = btUnitPropagation (cls, trail)
@@ -193,14 +207,18 @@ dpli cls trail =
                  in dpli cls ((p, Guessed):trail') --- recur with the next
                                                    --- best guess
 
--- | Test for satisfiability using 'dplii'
+-- | Test for satisfiability using 'dpli'
 dplisat :: Formula -> Bool
 dplisat fm = dpli (defCNFClauses fm) []
 
--- | Test for validity using 'dplii'
+-- | Test for validity using 'dpli'
 dplitaut :: Formula -> Bool
 dplitaut = not . dplisat . Not
 
+-- | Given a set of clauses, a literal, and a trail, go back through the
+-- trail as far as possible while ensuring the most recent decision @p@
+-- (the second argument) still leads to a conflict. It returns this
+-- modified 'Trail' list.
 backjump :: Clauses -> Formula -> [Trail] -> [Trail]
 backjump cls p trail@((q, Guessed):tt) =
   let (cls', trail') = btUnitPropagation (cls, (p,Guessed):tt)
@@ -209,11 +227,15 @@ backjump cls p trail@((q, Guessed):tt) =
      else trail
 backjump _ _ trail = trail
 
+-- | Given a list of 'Trail' elements, filter out all the 'Guessed' nodes.
+-- It will return a list of 'Trail', possibly empty if there were no 'Guessed'
+-- elements.
 guessedLiterals :: [Trail] -> [Trail]
 guessedLiterals ((p, Guessed):tt) = (p, Guessed):guessedLiterals tt
 guessedLiterals ((_, Deduced):tt) = guessedLiterals tt
 guessedLiterals [] = []
 
+-- | The DPLL with backjumping and conflict learning.
 dplb :: Clauses -> [Trail] -> Bool
 dplb cls trail =
   let (cls', trail') = btUnitPropagation (cls, trail)
@@ -232,12 +254,14 @@ dplb cls trail =
                              $ map (frequencies cls') ps
                  in dplb cls (Set.insert (p, Guessed) trail')
 
-
+-- | Uses our newfangled 'dplb' algorithm to test for satisfiability.
 isSatisfiable :: Formula -> Bool
 isSatisfiable fm = dplb (defCNFClauses fm) []
 
+-- | Simply the complement of 'isSatisfiable'
 isUnsatisfiable :: Formula -> Bool
 isUnsatisfiable = not . isSatisfiable
 
+-- | Checks if the negated input 'isUnsatisfiable'.
 isTautology :: Formula -> Bool
-isTautology fm = not $ isSatisfiable (Not fm)
+isTautology = isUnsatisfiable . Not
