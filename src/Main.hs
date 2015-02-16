@@ -13,7 +13,7 @@ import Formula
 import qualified DavisPutnam as DP
 
 testToStr :: Formula -> String
-testToStr fm = let result = isTautology fm
+testToStr fm = let result = DP.isTautology fm
                in if not result
                   then show fm ++ " is " ++ show result ++ "\n"
                   else "...True\n"

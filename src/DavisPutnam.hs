@@ -86,15 +86,6 @@ dp clauses = if [] `elem` clauses
                          Just clauses' -> dp clauses'
                          Nothing -> dp(resolutionRule clauses)
 
-isSatisfiable :: Formula -> Bool
-isSatisfiable = dp . defCNFClauses
-
-isUnsatisfiable :: Formula -> Bool
-isUnsatisfiable = not . isSatisfiable
-
-isTautology :: Formula -> Bool
-isTautology fm = not $ isSatisfiable (Not fm)
-
 frequencies :: [[Formula]] -> Formula -> (Int, Formula)
 frequencies clauses p = let m = length $ filter (elem p) clauses
                             n = length $ filter (elem (Not p)) clauses
@@ -211,14 +202,12 @@ dplitaut :: Formula -> Bool
 dplitaut = not . dplisat . Not
 
 backjump :: Clauses -> Formula -> [Trail] -> [Trail]
-backjump cls p trail =
-  case backtrack trail of
-   ((q, Guessed):tt) ->
-     let (cls', trail') = btUnitPropagation (cls, (p,Guessed):tt)
-     in if [] `elem` cls'
-        then backjump cls p tt
-        else trail
-   _ -> trail
+backjump cls p trail@((q, Guessed):tt) =
+  let (cls', trail') = btUnitPropagation (cls, (p,Guessed):tt)
+  in if [] `elem` cls'
+     then backjump cls p tt
+     else trail
+backjump _ _ trail = trail
 
 guessedLiterals :: [Trail] -> [Trail]
 guessedLiterals ((p, Guessed):tt) = (p, Guessed):guessedLiterals tt
@@ -228,17 +217,27 @@ guessedLiterals [] = []
 dplb :: Clauses -> [Trail] -> Bool
 dplb cls trail =
   let (cls', trail') = btUnitPropagation (cls, trail)
-      hasConflicts = ([] `elem`)
-  in if hasConflicts cls'
+  in if [] `elem` cls'
      then case backtrack trail of
-           ((p, Guessed):tt) -> let trail'' = backjump cls p tt
-                                    declits = guessedLiterals trail''
-                                    conflict = Set.insert (negate p)
-                                               (Set.image (negate . fst) declits)
-                                in dplb (conflict:cls) ((negate p, Deduced):trail'')
+           (p, Guessed):tt ->
+             let trail'' = backjump cls p tt
+                 declits = guessedLiterals trail''
+                 conflict = Set.insert (negate p)
+                            (Set.image (negate . fst) declits)
+             in dplb (conflict:cls) (Set.insert (negate p, Deduced) trail'')
            _ -> False
-     else case unassigned cls trail' of
+     else case unassigned cls trail of
            [] -> True
            ps -> let (_,p) = Data.List.maximum
                              $ map (frequencies cls') ps
-                 in dplb cls ((p, Guessed):trail')
+                 in dplb cls (Set.insert (p, Guessed) trail')
+
+
+isSatisfiable :: Formula -> Bool
+isSatisfiable fm = dplb (defCNFClauses fm) []
+
+isUnsatisfiable :: Formula -> Bool
+isUnsatisfiable = not . isSatisfiable
+
+isTautology :: Formula -> Bool
+isTautology fm = not $ isSatisfiable (Not fm)
