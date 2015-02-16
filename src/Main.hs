@@ -22,39 +22,88 @@ testToStr fm = let result = DP.isTautology fm
 -- | A number of tests taken from Francis Pelletier's "Seventy-Five
 -- Problems for Testing Automatic Theorem Provers"
 -- /Journal of Automated Reasoning/ __2__ (1986) 191-216
-pelletierTest :: [Formula]
-pelletierTest = [(Iff (Implies p q) (Implies (Not q) (Not p))),
-                 (Iff (Not (Not p)) p),
-                 (Implies (Not (Implies p q)) (Implies q p)),
-                 (Iff (Implies (Not p) q) (Implies (Not q) p)),
-                 (Implies (Implies (Or p q) (Or p r)) (Or p (Implies q r))),
-                 (Or p (Not p)),
-                 (Or p (Not $ Not $ Not p)),
-                 (Implies (Implies (Implies p q) p) p), --- Pierce's Law
-                 (Implies (And (Or p q)
-                               (And (Or (Not p) q)
-                                    (Or p (Not q))))
-                          (Not (Or (Not p) (Not q)))), --- Problem 9
-                 (Implies (And (Implies q r)
-                               (And (Implies r (And p q))
-                                    (Implies p (Or q r))))
-                          (Iff p q)), --- Modified version of Problem 10
-                 (Iff p p), --- Problem 11
-                 (Iff (Iff (Iff p q) r) (Iff p (Iff q r))),
-                 (Iff (Or p (And q r))
-                      (And (Or p q) (Or p r))),
-                 (Iff (Iff p q)
-                      (And (Or q (Not p))
-                           (Or (Not q) p))),
-                 (Iff (Implies p q) (Or (Not p) q)), --- problem 15
-                 (Or (Implies p q) (Implies q p)),
-                 (Iff (Implies (And p (Implies q r)) s)
-                      (And (Or (Not p) (Or q s))
-                           (Or (Not p) (Or (Not r) s))))]
+pierceLawTest :: Formula
+pierceLawTest = let p = Atom "p8"
+                    q = Atom "q8"
+                in Implies (Implies (Implies p q) p) p
+
+pelletierTestNine :: Formula
+pelletierTestNine = let p = Atom "p9"
+                        q = Atom "q9"
+                    in (Implies (And (Or p q)
+                                     (And (Or (Not p) q)
+                                          (Or p (Not q))))
+                                (Not (Or (Not p)
+                                         (Not q))))
+
+--- Modified version of Problem 10
+pelletierTestTen :: Formula
+pelletierTestTen = let p = Atom "p10"
+                       q = Atom "q10"
+                       r = Atom "r10"
+                   in (Implies (And (Implies q r)
+                                    (And (Implies r (And p q))
+                                         (Implies p (Or q r))))
+                               (Iff p q))
+
+pelletierTest' :: [Formula]
+pelletierTest' = [(Iff (Implies (Atom "p1") (Atom "q1"))
+                       (Implies (Not (Atom "q1")) (Not (Atom "p1")))),
+                  (Iff (Not (Not (Atom "p2")))
+                       (Atom "p2")),
+                  (Implies (Not (Implies (Atom "p3") (Atom "q3")))
+                           (Implies (Atom "q3") (Atom "p3"))),
+                  (Iff (Implies (Not (Atom "p4")) (Atom "q4"))
+                       (Implies (Not (Atom "q4")) (Atom "p4"))),
+                  (Implies (Implies (Or p q) (Or p r))
+                           (Or p (Implies q r))),
+                  (Or (Atom "p6")
+                      (Not (Atom "p6"))),
+                  (Or (Atom "p7") (Not $ Not $ Not (Atom "p7"))),
+                  pierceLawTest,
+                  pelletierTestNine,
+                  pelletierTestTen,
+                  (Iff (Atom "p11") (Atom "p11")), --- Problem 11
+                  (Iff (Iff (Iff (Atom "p12") (Atom "q12"))
+                            (Atom "r12"))
+                       (Iff (Atom "p12")
+                            (Iff (Atom "q12") (Atom "r12")))),
+                  (Iff (Or (Atom "p13")
+                           (And (Atom "q13")
+                                (Atom "r13")))
+                       (And (Or (Atom "p13")
+                                (Atom "q13"))
+                            (Or (Atom "p13")
+                                (Atom "r13")))),
+                  (Iff (Iff (Atom "p14") (Atom "q14"))
+                       (And (Or (Atom "q14")
+                                (Not (Atom "p14")))
+                            (Or (Not (Atom "q14"))
+                                (Atom "p14")))),
+                  (Iff (Implies (Atom "p15") (Atom "q15"))
+                       (Or (Not (Atom "p15")) (Atom "q15"))), --- problem 15
+                  (Or (Implies (Atom "p16") (Atom "q16"))
+                      (Implies (Atom "q16") (Atom "p16"))),
+                  (Iff (Implies (And (Atom "p17")
+                                     (Implies (Atom "q17")
+                                              (Atom "r17")))
+                                (Atom "s17"))
+                       (And (Or (Not (Atom "p17"))
+                                (Or (Atom "q17")
+                                    (Atom "s17")))
+                            (Or (Not (Atom "p17"))
+                                (Or (Not (Atom "r17"))
+                                    (Atom "s17")))))]
                 where p = Atom "p"
                       q = Atom "q"
                       r = Atom "r"
-                      s = Atom "s"
+
+-- | The Pelletier test, plus a stress test checking the the first 5
+-- are all logically equivalent to 'Formula.T'. You can really feel how
+-- slow the naive CNF and DNF algorithms are on this stress test, even
+-- on a modern computer with 8 processors and 12 Gigs of RAM.
+pelletierTest :: [Formula]
+pelletierTest = pelletierTest' ++ [foldr Iff T (take 5 pelletierTest')]
 
 tautologyTests :: () -> String
 tautologyTests _ =
