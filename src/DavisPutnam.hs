@@ -156,7 +156,7 @@ unitSubpropagate (cls, m, trail) =
      then (cls', m, trail)
      else let trail' = foldr (\l t -> (l, Deduced):t) trail newunits
               m' = foldr (\l mp -> Map.insert l l mp) m newunits
-          in (cls', m', trail')
+          in unitSubpropagate (cls', m', trail')
 
 -- | Unit propagation using the newfangled 'Trail'.
 btUnitPropagation :: (Clauses, [Trail]) -> (Clauses, [Trail])
@@ -168,8 +168,8 @@ btUnitPropagation (cls, trail) =
 -- | Backtrack the trail until we found the last guess which caused problems.
 backtrack :: [Trail] -> [Trail]
 backtrack ((_, Deduced):tt) = backtrack tt
-backtrack tt@((_, Guessed):_) = tt
-backtrack [] = []
+backtrack tt = tt
+--- backtrack [] = []
 
 -- | All the literals in the clauses not yet assigned to the trail yet.
 unassigned :: Clauses -> [Trail] -> [Formula]
@@ -186,7 +186,7 @@ dpli cls trail =
            (p, Guessed):tt                        --- we guessed last
              -> dpli cls ((negate p, Deduced):tt) --- and guess again!
            _ -> False                             --- unless we can't
-     else case unassigned cls trail of --- otherwise
+     else case unassigned cls trail' of           --- otherwise
            [] -> True   --- it's satisfiable if there are no unassigned literals
            ps -> let (_, p) = Data.List.maximum
                               $ map (frequencies cls') ps
@@ -226,7 +226,7 @@ dplb cls trail =
                             (Set.image (negate . fst) declits)
              in dplb (conflict:cls) (Set.insert (negate p, Deduced) trail'')
            _ -> False
-     else case unassigned cls trail of
+     else case unassigned cls trail' of
            [] -> True
            ps -> let (_,p) = Data.List.maximum
                              $ map (frequencies cls') ps
