@@ -42,8 +42,8 @@ oneLiteralRule clauses = case Data.List.find isUnitClause clauses of
 -- | Attempts to eliminate literals that show up as _only positive_ or
 -- _only negative_. If this eliminates everything, it will return
 -- 'Nothing'; otherwise, it returns 'Just' the transformed clauses.
-affirmitiveNegativeRule :: [[Formula]] -> Maybe [[Formula]]
-affirmitiveNegativeRule clauses =
+affirmativeNegativeRule :: [[Formula]] -> Maybe [[Formula]]
+affirmativeNegativeRule clauses =
   let (neg', pos) = Data.List.partition isNegative (Set.unions clauses)
       neg = map negate neg'
       posOnly = Set.difference pos neg
@@ -87,7 +87,7 @@ dp clauses = if [] `elem` clauses
              then False
              else case oneLiteralRule clauses of
              Just clauses' -> dp clauses'
-             Nothing -> case affirmitiveNegativeRule clauses of
+             Nothing -> case affirmativeNegativeRule clauses of
                          Just clauses' -> dp clauses'
                          Nothing -> dp(resolutionRule clauses)
 
@@ -115,7 +115,7 @@ dpll clauses = if [] `elem` clauses
                then False
                else case oneLiteralRule clauses of
                   Just clauses' -> dpll clauses'
-                  Nothing -> case affirmitiveNegativeRule clauses of
+                  Nothing -> case affirmativeNegativeRule clauses of
                     Just clauses' -> dpll clauses'
                     Nothing -> let pvs = getLiterals clauses
                                    lcounts = map (frequencies clauses) pvs 
