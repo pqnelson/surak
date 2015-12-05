@@ -13,7 +13,6 @@ elements. Sets are ordered for efficiency.
 module Set
        (
          setify
-       , uniq
        , insert
        , union
        , unions
@@ -27,17 +26,11 @@ module Set
        , image
        ) where
 import qualified Data.List as List
+import qualified Data.Set as Set
 
--- | Create a sorted list with unique elements.
+-- | Create a sorted list with unique elements, it should be O(N log N).
 setify :: Ord a => [a] -> [a]
-setify = uniq . List.sort
-
--- | Remove duplicates from a sorted list.
-uniq :: Ord a => [a] -> [a]
-uniq (x : t@(y:_)) = if x==y
-                     then uniq t
-                     else x:uniq t
-uniq l = l
+setify = Set.toList . Set.fromList
 
 union' :: Ord a => [a] -> [a] -> [a]
 union' [] s2 = s2
