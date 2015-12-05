@@ -31,6 +31,7 @@ import qualified Data.Map as Map
 import qualified Data.List
 import qualified Set
 import Prelude hiding (negate)
+import Control.Monad (liftM2)
 import Data.Maybe
 import Formula
 
@@ -130,10 +131,9 @@ nnfToDNF (Or p q) = Or (nnfToDNF p) (nnfToDNF q)
 nnfToDNF fm = fm
 
 --- Helper function
---- XXX: performance-wise, this is a horrible function; low hanging
---- fruit would be to optimize this function
+--- TODO: double check performance really improved with use of @liftM2@
 allPairs :: Ord c => (a -> b -> c) -> [a] -> [b] -> [c]
-allPairs f xs ys = Set.setify [f x y | x <- xs, y <- ys]
+allPairs f xs ys = Set.setify $ map (uncurry f) $ liftM2 (,) xs ys
 
 -- | Given a formula in NNF, convert it to a list of clauses, where each
 -- clause is represented as a list of literals.

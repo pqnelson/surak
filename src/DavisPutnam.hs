@@ -80,16 +80,24 @@ resolutionRule clauses =
       (_, p) = Data.List.minimum $ map (findBlowup clauses) pvs
   in resolveOn p clauses
 
+-- | The basic structure of the Davis-Putnam and DPLL algorithms are the
+-- same, they just differ with respect to the splitting rule. So,
+-- refactor out the similar structure into a helper function, and have
+-- each algorithm pass in its own splitting rule.
+dpSkeleton :: [[Formula]] -> ([[Formula]] -> Bool) -> Bool
+dpSkeleton [] _ = True
+dpSkeleton clauses isSatisfiable =
+  if [] `elem` clauses
+  then False
+  else case oneLiteralRule clauses of
+        Just clauses' -> dpSkeleton clauses' isSatisfiable
+        Nothing -> case affirmativeNegativeRule clauses of
+                    Just clauses' -> dpSkeleton clauses' isSatisfiable
+                    Nothing -> isSatisfiable clauses
+
 -- | The original Davis-Putnam algorithm, in all its glory.
 dp :: [[Formula]] -> Bool
-dp [] = True
-dp clauses = if [] `elem` clauses
-             then False
-             else case oneLiteralRule clauses of
-             Just clauses' -> dp clauses'
-             Nothing -> case affirmativeNegativeRule clauses of
-                         Just clauses' -> dp clauses'
-                         Nothing -> dp(resolutionRule clauses)
+dp clauses = dpSkeleton clauses (dp . resolutionRule)
 
 -- | Given the clauses and a literal, return an ordered pair '(Int, Formula)'
 -- which gives how many times the literal (or its negation) appears in
@@ -106,22 +114,19 @@ getLiterals clauses = let (pos,neg) = Data.List.partition isPositive
                                       $ Set.unions clauses
                       in Set.union pos (map negate neg)
 
+-- | The unique component to the DPLL modifies the splitting rule.
+splittingRule :: [[Formula]] -> Bool
+splittingRule clauses = let pvs = getLiterals clauses
+                            lcounts = map (frequencies clauses) pvs 
+                            (_, p) = Data.List.maximum lcounts
+                        in dpll (Set.insert [p] clauses)
+                           || dpll (Set.insert [negate p] clauses)
+
 -- | The 1962 Davis-Putnam rule, which is slightly slicker.
 -- See Davis, Logemann, and Loveland's "A Machine Program for Theorem Proving"
 -- Comm. of the ACM, vol 5, no 7 (1962) pp 394-397 for the original reference.
 dpll :: [[Formula]] -> Bool
-dpll [] = True
-dpll clauses = if [] `elem` clauses
-               then False
-               else case oneLiteralRule clauses of
-                  Just clauses' -> dpll clauses'
-                  Nothing -> case affirmativeNegativeRule clauses of
-                    Just clauses' -> dpll clauses'
-                    Nothing -> let pvs = getLiterals clauses
-                                   lcounts = map (frequencies clauses) pvs 
-                                   (_, p) = Data.List.maximum lcounts
-                               in dpll (Set.insert [p] clauses)
-                                  || dpll (Set.insert [negate p] clauses)
+dpll clauses = dpSkeleton clauses splittingRule
 
 {-
   The following code is idiosyncratic, and has to do with backtracking
