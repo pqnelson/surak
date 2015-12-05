@@ -133,7 +133,7 @@ nnfToDNF fm = fm
 --- Helper function
 --- TODO: double check performance really improved with use of @liftM2@
 allPairs :: Ord c => (a -> b -> c) -> [a] -> [b] -> [c]
-allPairs f xs ys = Set.setify $ map (uncurry f) $ liftM2 (,) xs ys
+allPairs f xs ys = Set.setify $ liftM2 f xs ys
 
 -- | Given a formula in NNF, convert it to a list of clauses, where each
 -- clause is represented as a list of literals.
